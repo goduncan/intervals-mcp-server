@@ -39,6 +39,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     create_custom_item,
     update_custom_item,
     delete_custom_item,
+    get_server_version,
 )
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
 
@@ -377,6 +378,14 @@ def test_get_custom_items(monkeypatch):
     assert "HR Zones" in result
     assert "ZONES" in result
     assert "Power Chart" in result
+
+
+def test_get_server_version():
+    """
+    Test get_server_version returns the MCP server package version.
+    """
+    result = asyncio.run(get_server_version())
+    assert result == "intervals-mcp-server 0.2.0"
 
 
 def test_get_custom_item_by_id(monkeypatch):
