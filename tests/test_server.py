@@ -17,6 +17,7 @@ import asyncio
 import os
 import pathlib
 import sys
+from datetime import date, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
@@ -267,6 +268,7 @@ def test_delete_event_rejects_past_event(monkeypatch):
     """
     Test delete_event refuses to delete events that are not in the future.
     """
+    today = date.today()
     calls: list[tuple[str, str]] = []
 
     async def fake_request(*_args, **kwargs):
@@ -274,7 +276,7 @@ def test_delete_event_rejects_past_event(monkeypatch):
         if kwargs["url"].endswith("/event/e1"):
             return {
                 "id": "e1",
-                "date": "2026-03-18",
+                "date": today.isoformat(),
                 "name": "Completed Workout",
             }
         raise AssertionError("Delete request should not be issued for non-future events")
@@ -292,12 +294,13 @@ def test_delete_event_allows_future_event(monkeypatch):
     """
     Test delete_event allows deletion for events scheduled after today.
     """
+    future_date = date.today() + timedelta(days=1)
 
     async def fake_request(*_args, **kwargs):
         if kwargs["url"].endswith("/event/e2"):
             return {
                 "id": "e2",
-                "date": "2026-03-19",
+                "date": future_date.isoformat(),
                 "name": "Planned Workout",
             }
         if kwargs["url"].endswith("/events/e2"):
@@ -316,15 +319,19 @@ def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
     """
     Test delete_events_by_date_range only deletes future events.
     """
+    today = date.today()
+    past_date = (today - timedelta(days=1)).isoformat()
+    today_date = today.isoformat()
+    future_date = (today + timedelta(days=1)).isoformat()
     deleted_urls: list[str] = []
 
     async def fake_request(*_args, **kwargs):
         url = kwargs["url"]
         if url.endswith("/events") and kwargs.get("method", "GET") == "GET":
             return [
-                {"id": "past", "date": "2026-03-17"},
-                {"id": "today", "date": "2026-03-18"},
-                {"id": "future", "date": "2026-03-19"},
+                {"id": "past", "date": past_date},
+                {"id": "today", "date": today_date},
+                {"id": "future", "date": future_date},
             ]
         if url.endswith("/events/future") and kwargs.get("method") == "DELETE":
             deleted_urls.append(url)
@@ -336,8 +343,8 @@ def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
 
     result = asyncio.run(
         delete_events_by_date_range(
-            start_date="2026-03-17",
-            end_date="2026-03-19",
+            start_date=past_date,
+            end_date=future_date,
             athlete_id="1",
         )
     )
