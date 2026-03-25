@@ -1,6 +1,6 @@
 # Intervals.icu MCP Server
 
-Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
+Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication, diagnostics, and data retrieval for activities, events, and wellness data.
 
 If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
 
@@ -42,7 +42,7 @@ source .venv/bin/activate
 ### 4. Sync project dependencies
 
 ```bash
-uv sync
+uv sync --all-extras
 ```
 
 ### 5. Set up environment variables
@@ -81,7 +81,8 @@ This project is actively developed, with new features and fixes added regularly.
 > ⚠️ Make sure you don’t have uncommitted changes before running this command.
 
 ```bash
-git checkout main && git pull
+git switch main
+git pull
 ```
 
 ### 2. Update Python dependencies
@@ -90,7 +91,7 @@ Activate your virtual environment and sync dependencies:
 
 ```bash
 source .venv/bin/activate
-uv sync
+uv sync --all-extras
 ```
 
 ### Troubleshooting
@@ -168,6 +169,8 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_wellness_data`: Fetch wellness data
 - `get_events`: Retrieve upcoming events (workouts, races, etc.)
 - `get_event_by_id`: Get detailed information for a specific event
+- `get_server_version`: Return the MCP server package version
+- `get_server_info`: Return version, transport, configured-path, and non-secret configuration diagnostics
 
 ## Usage with ChatGPT
 
@@ -177,7 +180,7 @@ ChatGPT’s beta MCP connectors can also talk to this server over the SSE transp
 
    ```bash
    export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=sse FASTMCP_LOG_LEVEL=INFO
-   python src/intervals_mcp_server/server.py
+   mcp run src/intervals_mcp_server/server.py
    ```
 
    The startup log prints the full URLs (for example `http://127.0.0.1:8765/sse`). ChatGPT needs that public URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
@@ -198,7 +201,9 @@ Install development dependencies and run the test suite with:
 
 ```bash
 uv sync --all-extras
-pytest -v tests
+uv run ruff check .
+uv run mypy src tests
+uv run pytest
 ```
 
 ### Running the server locally
@@ -208,6 +213,15 @@ To start the server manually (useful when developing or testing), run:
 ```bash
 mcp run src/intervals_mcp_server/server.py
 ```
+
+### Versioning and introspection
+
+The package version is stored in `pyproject.toml` and surfaced through MCP tools:
+
+- `get_server_version`: returns the package version string
+- `get_server_info`: returns JSON diagnostics including version, revision, transport, configured API base URL, and whether required credentials are present
+
+When you change externally visible behavior, add a tool, or change configuration semantics, bump the package version before merge and keep `uv.lock` in sync.
 
 #### Enabling debug logging
 

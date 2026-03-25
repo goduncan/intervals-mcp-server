@@ -14,10 +14,11 @@ The tests ensure that the server's public API returns expected strings and handl
 """
 
 import asyncio
+import json
 import os
 import pathlib
 import sys
-from datetime import date, timedelta
+from datetime import date
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
@@ -39,6 +40,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     create_custom_item,
     update_custom_item,
     delete_custom_item,
+    get_server_info,
     get_server_version,
 )
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
@@ -269,7 +271,7 @@ def test_delete_event_rejects_past_event(monkeypatch):
     """
     Test delete_event refuses to delete events that are not in the future.
     """
-    today = date.today()
+    frozen_today = date(2026, 3, 18)
     calls: list[tuple[str, str]] = []
 
     async def fake_request(*_args, **kwargs):
@@ -277,11 +279,12 @@ def test_delete_event_rejects_past_event(monkeypatch):
         if kwargs["url"].endswith("/event/e1"):
             return {
                 "id": "e1",
-                "date": today.isoformat(),
+                "date": frozen_today.isoformat(),
                 "name": "Completed Workout",
             }
         raise AssertionError("Delete request should not be issued for non-future events")
 
+    monkeypatch.setattr("intervals_mcp_server.tools.events.get_today", lambda: frozen_today)
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
 
@@ -295,7 +298,8 @@ def test_delete_event_allows_future_event(monkeypatch):
     """
     Test delete_event allows deletion for events scheduled after today.
     """
-    future_date = date.today() + timedelta(days=1)
+    frozen_today = date(2026, 3, 18)
+    future_date = date(2026, 3, 19)
 
     async def fake_request(*_args, **kwargs):
         if kwargs["url"].endswith("/event/e2"):
@@ -308,6 +312,7 @@ def test_delete_event_allows_future_event(monkeypatch):
             return {}
         raise AssertionError(f"Unexpected request: {kwargs}")
 
+    monkeypatch.setattr("intervals_mcp_server.tools.events.get_today", lambda: frozen_today)
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
 
@@ -320,10 +325,10 @@ def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
     """
     Test delete_events_by_date_range only deletes future events.
     """
-    today = date.today()
-    past_date = (today - timedelta(days=1)).isoformat()
-    today_date = today.isoformat()
-    future_date = (today + timedelta(days=1)).isoformat()
+    frozen_today = date(2026, 3, 18)
+    past_date = "2026-03-17"
+    today_date = frozen_today.isoformat()
+    future_date = "2026-03-19"
     deleted_urls: list[str] = []
 
     async def fake_request(*_args, **kwargs):
@@ -339,6 +344,7 @@ def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
             return {}
         raise AssertionError(f"Unexpected request: {kwargs}")
 
+    monkeypatch.setattr("intervals_mcp_server.tools.events.get_today", lambda: frozen_today)
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
 
@@ -385,7 +391,23 @@ def test_get_server_version():
     Test get_server_version returns the MCP server package version.
     """
     result = asyncio.run(get_server_version())
-    assert result == "intervals-mcp-server 0.2.0"
+    assert result == "intervals-mcp-server 0.3.0"
+
+
+def test_get_server_info():
+    """
+    Test get_server_info returns server diagnostics without exposing secrets.
+    """
+    result = json.loads(asyncio.run(get_server_info()))
+    assert result["name"] == "intervals-icu"
+    assert result["version"] == "0.3.0"
+    assert result["transport"] == "stdio"
+    assert result["api_key_configured"] is True
+    assert result["athlete_id_configured"] is True
+    assert result["user_agent"] == "intervalsicu-mcp-server/0.3.0"
+    assert "get_server_info" in result["tools"]
+    assert "get_server_version" in result["tools"]
+    assert "api_key" not in result
 
 
 def test_get_custom_item_by_id(monkeypatch):

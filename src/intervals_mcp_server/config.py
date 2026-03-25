@@ -7,6 +7,7 @@ This module handles loading and validation of configuration from environment var
 import os
 from dataclasses import dataclass
 
+from intervals_mcp_server.utils.metadata import get_user_agent
 from intervals_mcp_server.utils.validation import validate_athlete_id
 
 # Try to load environment variables from .env file if it exists
@@ -45,7 +46,7 @@ def load_config() -> Config:
     api_key = os.getenv("API_KEY", "")
     athlete_id = os.getenv("ATHLETE_ID", "")
     intervals_api_base_url = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
-    user_agent = "intervalsicu-mcp-server/1.0"
+    user_agent = get_user_agent()
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:

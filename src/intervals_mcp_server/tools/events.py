@@ -5,12 +5,16 @@ This module contains tools for retrieving, creating, updating, and deleting athl
 """
 
 import json
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
+from intervals_mcp_server.utils.dates import (
+    get_default_end_date,
+    get_default_future_end_date,
+    get_today,
+)
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
@@ -97,7 +101,7 @@ def _ensure_event_is_future(event: dict[str, Any]) -> str | None:
     event_date = _extract_event_date(event)
     if event_date is None:
         return "Error deleting event: unable to determine the event date."
-    if event_date <= datetime.now().date():
+    if event_date <= get_today():
         return "Error deleting event: only future events can be deleted."
     return None
 
@@ -392,7 +396,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         return error_msg
 
     if not start_date:
-        start_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = get_default_end_date()
 
     try:
         event_data = _prepare_event_data(
