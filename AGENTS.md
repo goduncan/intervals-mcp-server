@@ -8,12 +8,22 @@ This project is a Python 3.12 backend service built with FastMCP and httpx. All 
   - `source .venv/bin/activate`
 - Sync dependencies including dev extras with `uv sync --all-extras`.
 - When editing or running the server manually use `mcp run src/intervals_mcp_server/server.py`.
+- Prefer `uv run ...` for repo-local commands so the checked-in environment and lockfile stay aligned.
 
 ## Testing Instructions
-- Run unit tests with `pytest` from the repository root.
-- Ensure linting passes with `ruff .` (no configuration file means default rules).
-- Run static type checks using `mypy src tests`.
+- Run unit tests with `uv run pytest` from the repository root.
+- Ensure linting passes with `uv run ruff check .`.
+- Run static type checks using `uv run mypy src tests`.
 - All three steps (`ruff`, `mypy`, and `pytest`) should succeed before committing.
+
+## Versioning And Releases
+- The package version lives in `pyproject.toml` and must be kept in sync with `uv.lock`.
+- Behavior changes, new tools, new configuration surface, or externally visible fixes should bump the package version before merge.
+- Prefer semantic versioning:
+  - patch: backward-compatible fixes and internal-only cleanup
+  - minor: backward-compatible new tools, diagnostics, or features
+  - major: breaking tool, config, or transport changes
+- The MCP metadata tools (`get_server_version` and `get_server_info`) should reflect the checked-in package version after your changes.
 
 ## PR Instructions
 - Use concise commit messages.

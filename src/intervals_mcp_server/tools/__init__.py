@@ -21,7 +21,7 @@ from intervals_mcp_server.tools.events import (  # noqa: F401
     get_event_by_id,
     get_events,
 )
-from intervals_mcp_server.tools.meta import get_server_version  # noqa: F401
+from intervals_mcp_server.tools.meta import get_server_info, get_server_version  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
 
 
@@ -52,6 +52,7 @@ __all__ = [
     "delete_event",
     "delete_events_by_date_range",
     "add_or_update_event",
+    "get_server_info",
     "get_server_version",
     "get_wellness_data",
 ]

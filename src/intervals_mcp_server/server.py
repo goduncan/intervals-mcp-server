@@ -18,7 +18,7 @@ Usage:
     from environment variables (optionally via a .env file) and communicates with the Intervals.icu API.
 
     To run the server:
-        $ python src/intervals_mcp_server/server.py
+        $ mcp run src/intervals_mcp_server/server.py
 
     MCP tools provided:
         - get_activities
@@ -29,6 +29,7 @@ Usage:
         - get_activity_intervals
         - get_activity_streams
         - add_events
+        - get_server_info
         - get_server_version
 
     See the README for more details on configuration and usage.
@@ -84,7 +85,10 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
     get_event_by_id,
     get_events,
 )
-from intervals_mcp_server.tools.meta import get_server_version  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.meta import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_server_info,
+    get_server_version,
+)
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
@@ -108,6 +112,7 @@ __all__ = [
     "delete_event",
     "delete_events_by_date_range",
     "add_or_update_event",
+    "get_server_info",
     "get_server_version",
     "get_wellness_data",
     "get_custom_items",

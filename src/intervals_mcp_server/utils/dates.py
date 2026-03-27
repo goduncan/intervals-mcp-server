@@ -4,7 +4,17 @@ Date utility functions for Intervals.icu MCP Server.
 This module provides helper functions for date parsing and default date calculations.
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+
+
+def get_today() -> date:
+    """
+    Get today's date.
+
+    Returns:
+        Today's date.
+    """
+    return datetime.now().date()
 
 
 def get_default_start_date(days_ago: int = 30) -> str:
@@ -17,7 +27,7 @@ def get_default_start_date(days_ago: int = 30) -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+    return (get_today() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
 
 def get_default_end_date() -> str:
@@ -27,7 +37,7 @@ def get_default_end_date() -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return datetime.now().strftime("%Y-%m-%d")
+    return get_today().strftime("%Y-%m-%d")
 
 
 def get_default_future_end_date(days_ahead: int = 30) -> str:
@@ -40,7 +50,7 @@ def get_default_future_end_date(days_ahead: int = 30) -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    return (get_today() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
 
 def parse_date_range(
