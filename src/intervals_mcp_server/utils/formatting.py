@@ -8,6 +8,83 @@ import json
 from datetime import datetime
 from typing import Any
 
+WELLNESS_FIELDS: set[str] = {
+    "training",
+    "sport_info",
+    "vital_signs",
+    "sleep",
+    "menstrual",
+    "subjective",
+    "nutrition",
+    "activity",
+}
+
+
+def _include_section(fields: set[str] | None, section: str) -> bool:
+    """Return whether a wellness section should be included."""
+    return fields is None or section in fields
+
+
+def _event_type(event: dict[str, Any]) -> str:
+    """Infer a human-readable event type."""
+    category = event.get("category")
+    if event.get("workout") or category == "WORKOUT":
+        return "Workout"
+    if event.get("race") or category == "RACE":
+        return "Race"
+    return "Other"
+
+
+def _event_date(event: dict[str, Any]) -> str:
+    """Extract the event date, trimming time when present."""
+    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    if isinstance(event_date, str) and len(event_date) > 10:
+        return event_date[:10]
+    return str(event_date)
+
+
+def _format_duration_label(secs: int) -> str:
+    """Format seconds into a short human-readable label."""
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        mins = secs // 60
+        remainder = secs % 60
+        return f"{mins}m{remainder}s" if remainder else f"{mins}m"
+    hours = secs // 3600
+    remainder = (secs % 3600) // 60
+    return f"{hours}h{remainder}m" if remainder else f"{hours}h"
+
+
+def strip_nulls(d: dict[str, Any]) -> dict[str, Any]:
+    """Remove keys whose values are None or empty collections."""
+    out: dict[str, Any] = {}
+    for key, value in d.items():
+        if value is None:
+            continue
+        if isinstance(value, (list, dict)) and not value:
+            continue
+        out[key] = value
+    return out
+
+
+def set_if(
+    target: dict[str, Any],
+    key: str,
+    value: Any,
+    *,
+    positive: bool = False,
+    transform: Any = None,
+) -> None:
+    """Conditionally set a key on a target dict."""
+    if value is None:
+        return
+    if positive and not (value > 0):
+        return
+    result = transform(value) if transform else value
+    if result is not None:
+        target[key] = result
+
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
@@ -236,7 +313,7 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
+def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -263,48 +340,48 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     lines.append("")
 
     training_metrics = _format_training_metrics(entries)
-    if training_metrics:
+    if _include_section(fields, "training") and training_metrics:
         lines.append("Training Metrics:")
         lines.extend(training_metrics)
         lines.append("")
 
     sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
+    if _include_section(fields, "sport_info") and sport_info_list:
         lines.append("Sport-Specific Info:")
         lines.extend(sport_info_list)
         lines.append("")
 
     vital_signs = _format_vital_signs(entries)
-    if vital_signs:
+    if _include_section(fields, "vital_signs") and vital_signs:
         lines.append("Vital Signs:")
         lines.extend(vital_signs)
         lines.append("")
 
     sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
+    if _include_section(fields, "sleep") and sleep_lines:
         lines.append("Sleep & Recovery:")
         lines.extend(sleep_lines)
         lines.append("")
 
     menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
+    if _include_section(fields, "menstrual") and menstrual_lines:
         lines.append("Menstrual Tracking:")
         lines.extend(menstrual_lines)
         lines.append("")
 
     subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
+    if _include_section(fields, "subjective") and subjective_lines:
         lines.append("Subjective Feelings:")
         lines.extend(subjective_lines)
         lines.append("")
 
     nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
+    if _include_section(fields, "nutrition") and nutrition_lines:
         lines.append("Nutrition & Hydration:")
         lines.extend(nutrition_lines)
         lines.append("")
 
-    if entries.get("steps") is not None:
+    if _include_section(fields, "activity") and entries.get("steps") is not None:
         lines.append("Activity:")
         lines.append(f"- Steps: {entries['steps']}")
         lines.append("")
@@ -319,19 +396,44 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
 
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
+    lines = [
+        f"Date: {_event_date(event)}",
+        f"ID: {event.get('id', 'N/A')}",
+        f"Type: {_event_type(event)}",
+        f"Name: {event.get('name', 'Unnamed')}",
+        f"Description: {event.get('description', 'No description')}",
+    ]
+    if event.get("icu_training_load") is not None:
+        lines.append(f"Training Load: {event['icu_training_load']}")
+    if event.get("icu_atl") is not None:
+        lines.append(f"ATL: {event['icu_atl']}")
+    if event.get("icu_ctl") is not None:
+        lines.append(f"CTL: {event['icu_ctl']}")
+    if event.get("icu_intensity") is not None:
+        lines.append(f"Intensity: {event['icu_intensity']:.1f}")
+    if event.get("strain_score") is not None:
+        lines.append(f"Strain: {event['strain_score']}")
+    return "\n".join(lines)
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
-    event_name = event.get("name", "Unnamed")
-    event_id = event.get("id", "N/A")
-    event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+def format_event_compact(event: dict[str, Any]) -> str:
+    """Format an event as a concise single-line summary."""
+    parts = [
+        _event_date(event),
+        f"{_event_type(event)}: {event.get('name', 'Unnamed')}",
+        f"(ID:{event.get('id', 'N/A')})",
+    ]
+    if event.get("icu_training_load") is not None:
+        parts.append(f"TL:{event['icu_training_load']}")
+    if event.get("icu_atl") is not None:
+        parts.append(f"ATL:{event['icu_atl']}")
+    if event.get("icu_ctl") is not None:
+        parts.append(f"CTL:{event['icu_ctl']}")
+    if event.get("icu_intensity") is not None:
+        parts.append(f"Int:{event['icu_intensity']:.1f}")
+    if event.get("strain_score") is not None:
+        parts.append(f"Strain:{event['strain_score']}")
+    return " | ".join(parts)
 
 
 def format_event_details(event: dict[str, Any]) -> str:
@@ -340,7 +442,7 @@ def format_event_details(event: dict[str, Any]) -> str:
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {_event_date(event)}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
 
@@ -361,7 +463,7 @@ TSS: {workout.get("tss", "N/A")}"""
 Intervals: {len(workout["intervals"])}"""
 
     # Check if it's a race
-    if event.get("race"):
+    if event.get("race") or event.get("category") == "RACE":
         event_details += f"""
 
 Race Information:
@@ -500,3 +602,38 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 """
 
     return result
+
+
+def format_power_curves(
+    curves: list[dict[str, Any]],
+    activity_type: str,
+    include_normalised: bool,
+) -> str:
+    """Format extracted power curve data into a concise readable string."""
+    lines = [f"Power Curves ({activity_type}):", ""]
+
+    for curve in curves:
+        label = curve.get("label", curve.get("id", "Unknown"))
+        start = curve.get("start", "")
+        end = curve.get("end", "")
+        date_range = ""
+        if start and end:
+            date_range = f" ({start[:10]} to {end[:10]})"
+        lines.append(f"{label}{date_range}:")
+
+        data_points = curve.get("data_points", [])
+        if not data_points:
+            lines.append("  No data available for requested durations.")
+            lines.append("")
+            continue
+
+        for point in data_points:
+            dur_label = _format_duration_label(point["secs"])
+            parts = [f"  {dur_label}: {point.get('watts')}W"]
+            if include_normalised and "watts_per_kg" in point:
+                parts.append(f"{point['watts_per_kg']:.2f}W/kg")
+            parts.append(f"[{point.get('activity_id', '')}]")
+            lines.append(" ".join(parts))
+        lines.append("")
+
+    return "\n".join(lines)

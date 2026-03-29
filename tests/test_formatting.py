@@ -6,12 +6,15 @@ These tests verify that the formatting functions produce expected output strings
 
 import json
 from intervals_mcp_server.utils.formatting import (
+    WELLNESS_FIELDS,
+    format_event_compact,
     format_activity_summary,
     format_workout,
     format_wellness_entry,
     format_event_summary,
     format_event_details,
     format_intervals,
+    format_power_curves,
 )
 from tests.sample_data import INTERVALS_DATA
 
@@ -63,6 +66,37 @@ def test_format_wellness_entry():
     assert result == expected_result
 
 
+def test_format_wellness_entry_single_field():
+    """A selected wellness field should omit unrelated sections."""
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 70,
+        "weight": 75,
+        "sleepSecs": 28800,
+        "steps": 10000,
+    }
+    result = format_wellness_entry(entry, fields={"vital_signs"})
+    assert "Vital Signs:" in result
+    assert "Weight: 75 kg" in result
+    assert "Training Metrics:" not in result
+    assert "Sleep & Recovery:" not in result
+    assert "Activity:" not in result
+
+
+def test_wellness_fields_constant():
+    """The allowed wellness field selectors should stay stable."""
+    assert WELLNESS_FIELDS == {
+        "training",
+        "sport_info",
+        "vital_signs",
+        "sleep",
+        "menstrual",
+        "subjective",
+        "nutrition",
+        "activity",
+    }
+
+
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.
@@ -77,6 +111,56 @@ def test_format_event_summary():
     summary = format_event_summary(event)
     assert "Date: 2024-01-01" in summary
     assert "Type: Race" in summary
+
+
+def test_format_event_compact():
+    """Compact event formatting should be single-line and include load metrics."""
+    event = {
+        "start_date_local": "2024-06-15T08:00:00",
+        "id": "e10",
+        "name": "Sweet Spot Ride",
+        "category": "WORKOUT",
+        "icu_training_load": 95,
+        "icu_atl": 70,
+        "icu_ctl": 62,
+        "icu_intensity": 0.80,
+        "strain_score": 50,
+    }
+    result = format_event_compact(event)
+    assert "2024-06-15" in result
+    assert "Workout: Sweet Spot Ride" in result
+    assert "ID:e10" in result
+    assert "TL:95" in result
+    assert "ATL:70" in result
+    assert "CTL:62" in result
+    assert "Int:0.8" in result
+    assert "Strain:50" in result
+    assert "\n" not in result
+
+
+def test_format_power_curves():
+    """Power curves should format durations, watts, W/kg, and activity IDs."""
+    curves = [
+        {
+            "id": "s0",
+            "label": "This season",
+            "start": "2025-09-29T00:00:00",
+            "end": "2026-03-14T00:00:00",
+            "data_points": [
+                {"secs": 5, "watts": 780, "activity_id": "i100", "watts_per_kg": 10.4},
+                {"secs": 60, "watts": 380, "activity_id": "i102", "watts_per_kg": 5.07},
+                {"secs": 3600, "watts": 210, "activity_id": "i107", "watts_per_kg": 2.8},
+            ],
+        }
+    ]
+    result = format_power_curves(curves, "Ride", include_normalised=True)
+    assert "Power Curves (Ride):" in result
+    assert "This season" in result
+    assert "5s: 780W" in result
+    assert "10.40W/kg" in result
+    assert "1m: 380W" in result
+    assert "1h: 210W" in result
+    assert "i100" in result
 
 
 def test_format_event_details():

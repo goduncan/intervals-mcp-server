@@ -17,9 +17,11 @@ The tests ensure that the server's public API returns expected strings and handl
 """
 
 import asyncio
+import json
 import os
 import pathlib
 import sys
+from datetime import date, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
@@ -28,21 +30,30 @@ os.environ.setdefault("ATHLETE_ID", "i1")
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
     add_activity_message,
     add_or_update_event,
+    create_custom_item,
+    delete_custom_item,
+    delete_event,
+    delete_events_by_date_range,
     get_activities,
     get_activity_details,
     get_activity_intervals,
     get_activity_messages,
     get_activity_streams,
+    get_athlete_power_curves,
+    get_athlete_zones,
+    get_custom_item_by_id,
+    get_custom_items,
     get_event_by_id,
     get_events,
+    get_training_summary,
     get_wellness_data,
-    get_custom_items,
-    get_custom_item_by_id,
-    create_custom_item,
     update_custom_item,
-    delete_custom_item,
 )
-from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
+from tests.sample_data import (  # pylint: disable=wrong-import-position
+    INTERVALS_DATA,
+    POWER_CURVES_DATA,
+    SPORT_SETTINGS_DATA,
+)
 
 
 def test_get_activities(monkeypatch):
@@ -563,3 +574,202 @@ def test_create_custom_item_with_invalid_json_content(monkeypatch):
         )
     )
     assert "Error: content must be valid JSON when passed as a string." in result
+
+
+def test_get_athlete_power_curves(monkeypatch):
+    """Power curves should be exposed through the server API."""
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_power_curves(activity_type="Ride", athlete_id="i1"))
+    assert "Power Curves (Ride):" in result
+    assert "This season" in result
+    assert "Last season" in result
+    assert "5s:" in result
+    assert "W/kg" in result
+
+
+def test_get_athlete_power_curves_custom_durations(monkeypatch):
+    """Custom durations should only include requested durations."""
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(activity_type="Ride", durations=[5, 60], athlete_id="i1")
+    )
+    assert "5s:" in result
+    assert "1m:" in result
+    assert "15s:" not in result
+
+
+def test_get_athlete_zones(monkeypatch):
+    """Athlete zones should return compact JSON for the selected sport."""
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.athlete.make_intervals_request", fake_request)
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
+    parsed = json.loads(result)
+    run = parsed[0]
+    assert run["sport"] == "Run"
+    assert run["thresholds"]["threshold_pace_minkm"] == "4:35"
+    assert "pace_zones" in run
+
+
+def test_get_training_summary(monkeypatch):
+    """Training summary should aggregate summary, activities, and dict-shaped wellness."""
+    summary_weeks = [
+        {
+            "date": "2026-03-10",
+            "count": 2,
+            "fitness": 60.0,
+            "fatigue": 70.0,
+            "form": -10.0,
+            "rampRate": 1.5,
+            "training_load": 100,
+            "srpe": 300,
+            "time": 7200,
+            "distance": 40000,
+            "total_elevation_gain": 500,
+            "byCategory": [
+                {
+                    "category": "Ride",
+                    "count": 2,
+                    "training_load": 100,
+                    "time": 7200,
+                    "distance": 40000,
+                    "total_elevation_gain": 500,
+                    "eftp": 260,
+                    "eftpPerKg": 3.2,
+                }
+            ],
+        }
+    ]
+    activities = [{"start_date_local": "2026-03-11T08:00:00", "compliance": 90}]
+    wellness = {"2026-03-12": {"hrvRMSSD": 55, "restingHR": 45, "sleepSecs": 28800}}
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if "athlete-summary" in url:
+            return list(summary_weeks)
+        if "activities" in url:
+            return activities
+        if "wellness" in url:
+            return wellness
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_summary.make_intervals_request", fake_request
+    )
+    result = json.loads(
+        asyncio.run(
+            get_training_summary(
+                start_date="2026-03-10",
+                end_date="2026-03-16",
+                athlete_id="i1",
+            )
+        )
+    )
+    assert result["period"]["start"] == "2026-03-10"
+    assert result["period_totals"]["sessions"] == 2
+    assert result["weeks"][0]["compliance_pct"] == 90
+    assert result["weeks"][0]["wellness"]["hrv"] == 55.0
+
+
+def test_delete_event_rejects_past_event(monkeypatch):
+    """Test delete_event refuses to delete events that are not in the future."""
+    today = date.today()
+    calls: list[tuple[str, str]] = []
+
+    async def fake_request(*_args, **kwargs):
+        calls.append((kwargs.get("method", "GET"), kwargs["url"]))
+        if kwargs["url"].endswith("/events/e1"):
+            return {
+                "id": "e1",
+                "date": today.isoformat(),
+                "name": "Completed Workout",
+            }
+        raise AssertionError("Delete request should not be issued for non-future events")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(delete_event(event_id="e1", athlete_id="1"))
+
+    assert result == "Error deleting event: only future events can be deleted."
+    assert calls == [("GET", "/athlete/1/events/e1")]
+
+
+def test_delete_event_allows_future_event(monkeypatch):
+    """Test delete_event allows deletion for events scheduled after today."""
+    future_date = date.today() + timedelta(days=1)
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs["url"].endswith("/events/e2") and kwargs.get("method", "GET") == "GET":
+            return {
+                "id": "e2",
+                "date": future_date.isoformat(),
+                "name": "Planned Workout",
+            }
+        if kwargs["url"].endswith("/events/e2"):
+            return {}
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(delete_event(event_id="e2", athlete_id="1"))
+
+    assert result == "{}"
+
+
+def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
+    """Test delete_events_by_date_range only deletes future events."""
+    today = date.today()
+    past_date = (today - timedelta(days=1)).isoformat()
+    today_date = today.isoformat()
+    future_date = (today + timedelta(days=1)).isoformat()
+    deleted_urls: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if url.endswith("/events") and kwargs.get("method", "GET") == "GET":
+            return [
+                {"id": "past", "date": past_date},
+                {"id": "today", "date": today_date},
+                {"id": "future", "date": future_date},
+            ]
+        if url.endswith("/events/future") and kwargs.get("method") == "DELETE":
+            deleted_urls.append(url)
+            return {}
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date=past_date,
+            end_date=future_date,
+            athlete_id="1",
+        )
+    )
+
+    assert deleted_urls == ["/athlete/1/events/future"]
+    assert "Deleted 1 future events." in result
+    assert "Skipped 2 non-future events: ['past', 'today']." in result
+    assert "Failed to delete 0 events: []" in result
+

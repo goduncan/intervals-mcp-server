@@ -14,6 +14,7 @@ from intervals_mcp_server.tools.activities import (  # noqa: F401
     get_activity_intervals,
     get_activity_streams,
 )
+from intervals_mcp_server.tools.athlete import get_athlete_zones  # noqa: F401
 from intervals_mcp_server.tools.events import (  # noqa: F401
     add_or_update_event,
     delete_event,
@@ -21,6 +22,8 @@ from intervals_mcp_server.tools.events import (  # noqa: F401
     get_event_by_id,
     get_events,
 )
+from intervals_mcp_server.tools.training_summary import get_training_summary  # noqa: F401
+from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
 
 
@@ -46,6 +49,9 @@ __all__ = [
     "get_activity_details",
     "get_activity_intervals",
     "get_activity_streams",
+    "get_athlete_zones",
+    "get_athlete_power_curves",
+    "get_training_summary",
     "get_events",
     "get_event_by_id",
     "delete_event",

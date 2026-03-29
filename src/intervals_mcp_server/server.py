@@ -72,6 +72,7 @@ from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-imp
     get_activity_messages,
     get_activity_streams,
 )
+from intervals_mcp_server.tools.athlete import get_athlete_zones  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-position  # noqa: E402
     add_or_update_event,
     delete_event,
@@ -79,6 +80,8 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
     get_event_by_id,
     get_events,
 )
+from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.training_summary import get_training_summary  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
@@ -87,6 +90,7 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
     get_custom_items,
     update_custom_item,
 )
+from intervals_mcp_server.resources.guide import coaching_context_protocol  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -99,6 +103,9 @@ __all__ = [
     "get_activity_intervals",
     "get_activity_messages",
     "get_activity_streams",
+    "get_athlete_zones",
+    "get_athlete_power_curves",
+    "get_training_summary",
     "get_events",
     "get_event_by_id",
     "delete_event",
@@ -110,6 +117,7 @@ __all__ = [
     "create_custom_item",
     "update_custom_item",
     "delete_custom_item",
+    "coaching_context_protocol",
 ]
 
 

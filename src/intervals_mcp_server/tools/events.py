@@ -5,15 +5,23 @@ This module contains tools for retrieving, creating, updating, and deleting athl
 """
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
-from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
+from intervals_mcp_server.utils.formatting import (
+    format_event_compact,
+    format_event_details,
+    format_event_summary,
+)
 from intervals_mcp_server.utils.types import WorkoutDoc
-from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
+from intervals_mcp_server.utils.validation import (
+    resolve_activity_type,
+    resolve_athlete_id,
+    validate_date,
+)
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -21,22 +29,25 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
-def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
-    """Determine the workout type based on the name and provided value."""
-    if workout_type:
-        return workout_type
-    name_lower = name.lower() if name else ""
-    mapping = [
-        ("Ride", ["bike", "cycle", "cycling", "ride"]),
-        ("Run", ["run", "running", "jog", "jogging"]),
-        ("Swim", ["swim", "swimming", "pool"]),
-        ("Walk", ["walk", "walking", "hike", "hiking"]),
-        ("Row", ["row", "rowing"]),
-    ]
-    for workout, keywords in mapping:
-        if any(keyword in name_lower for keyword in keywords):
-            return workout
-    return "Ride"  # Default
+def _extract_event_date(event: dict[str, Any]) -> date | None:
+    """Extract the event date from Intervals.icu event payloads."""
+    raw_date = event.get("start_date_local") or event.get("date")
+    if not isinstance(raw_date, str) or len(raw_date) < 10:
+        return None
+    try:
+        return date.fromisoformat(raw_date[:10])
+    except ValueError:
+        return None
+
+
+def _ensure_event_is_future(event: dict[str, Any]) -> str | None:
+    """Reject deletion unless the event is scheduled strictly after today."""
+    event_date = _extract_event_date(event)
+    if event_date is None:
+        return "Error deleting event: unable to determine the event date."
+    if event_date <= datetime.now().date():
+        return "Error deleting event: only future events can be deleted."
+    return None
 
 
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -51,7 +62,7 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
 
     Many arguments are required to match the Intervals.icu API event structure.
     """
-    resolved_workout_type = _resolve_workout_type(name, workout_type)
+    resolved_workout_type = resolve_activity_type(name, workout_type)
     return {
         "start_date_local": start_date + "T00:00:00",
         "category": "WORKOUT",
@@ -111,6 +122,7 @@ async def get_events(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    compact: bool = True,
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -119,6 +131,7 @@ async def get_events(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
+        compact: Return one-line event summaries when True.
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -152,12 +165,13 @@ async def get_events(
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
+    formatter = format_event_compact if compact else format_event_summary
     events_summary = "Events:\n\n"
     for event in events:
         if not isinstance(event, dict):
             continue
 
-        events_summary += format_event_summary(event) + "\n\n"
+        events_summary += formatter(event) + "\n"
 
     return events_summary
 
@@ -182,7 +196,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -216,6 +230,16 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
+    event_result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
+    )
+    if isinstance(event_result, dict) and "error" in event_result:
+        return f"Error deleting event: {event_result.get('message')}"
+    if not isinstance(event_result, dict):
+        return f"Error deleting event: unable to load event {event_id}."
+    protection_error = _ensure_event_is_future(event_result)
+    if protection_error:
+        return protection_error
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
     )
@@ -273,9 +297,24 @@ async def delete_events_by_date_range(
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    deleted_count = len(events) - len(failed_events)
-    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    future_events = []
+    skipped_events = []
+    for event in events:
+        if not isinstance(event, dict):
+            skipped_events.append("unknown")
+            continue
+        if _ensure_event_is_future(event) is None:
+            future_events.append(event)
+        else:
+            skipped_events.append(event.get("id"))
+
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, future_events)
+    deleted_count = len(future_events) - len(failed_events)
+    return (
+        f"Deleted {deleted_count} future events. "
+        f"Skipped {len(skipped_events)} non-future events: {skipped_events}. "
+        f"Failed to delete {len(failed_events)} events: {failed_events}"
+    )
 
 
 @mcp.tool()
