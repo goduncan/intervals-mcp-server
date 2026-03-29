@@ -8,6 +8,65 @@ import json
 from datetime import datetime
 from typing import Any
 
+WELLNESS_FIELDS: set[str] = {
+    "training",
+    "sport_info",
+    "vital_signs",
+    "sleep",
+    "menstrual",
+    "subjective",
+    "nutrition",
+    "activity",
+}
+
+
+def _include_section(fields: set[str] | None, section: str) -> bool:
+    """Return whether a wellness section should be included."""
+    return fields is None or section in fields
+
+
+def _format_duration_label(secs: int) -> str:
+    """Format seconds into a short human-readable label."""
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        mins = secs // 60
+        remainder = secs % 60
+        return f"{mins}m{remainder}s" if remainder else f"{mins}m"
+    hours = secs // 3600
+    remainder = (secs % 3600) // 60
+    return f"{hours}h{remainder}m" if remainder else f"{hours}h"
+
+
+def strip_nulls(d: dict[str, Any]) -> dict[str, Any]:
+    """Remove keys whose values are None or empty collections."""
+    out: dict[str, Any] = {}
+    for key, value in d.items():
+        if value is None:
+            continue
+        if isinstance(value, (list, dict)) and not value:
+            continue
+        out[key] = value
+    return out
+
+
+def set_if(
+    target: dict[str, Any],
+    key: str,
+    value: Any,
+    *,
+    positive: bool = False,
+    transform: Any = None,
+) -> None:
+    """Conditionally set a key on a target dict."""
+    if value is None:
+        return
+    if positive and not (value > 0):
+        return
+    result = transform(value) if transform else value
+    if result is not None:
+        target[key] = result
+
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
@@ -250,7 +309,7 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
+def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -277,48 +336,48 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     lines.append("")
 
     training_metrics = _format_training_metrics(entries)
-    if training_metrics:
+    if _include_section(fields, "training") and training_metrics:
         lines.append("Training Metrics:")
         lines.extend(training_metrics)
         lines.append("")
 
     sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
+    if _include_section(fields, "sport_info") and sport_info_list:
         lines.append("Sport-Specific Info:")
         lines.extend(sport_info_list)
         lines.append("")
 
     vital_signs = _format_vital_signs(entries)
-    if vital_signs:
+    if _include_section(fields, "vital_signs") and vital_signs:
         lines.append("Vital Signs:")
         lines.extend(vital_signs)
         lines.append("")
 
     sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
+    if _include_section(fields, "sleep") and sleep_lines:
         lines.append("Sleep & Recovery:")
         lines.extend(sleep_lines)
         lines.append("")
 
     menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
+    if _include_section(fields, "menstrual") and menstrual_lines:
         lines.append("Menstrual Tracking:")
         lines.extend(menstrual_lines)
         lines.append("")
 
     subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
+    if _include_section(fields, "subjective") and subjective_lines:
         lines.append("Subjective Feelings:")
         lines.extend(subjective_lines)
         lines.append("")
 
     nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
+    if _include_section(fields, "nutrition") and nutrition_lines:
         lines.append("Nutrition & Hydration:")
         lines.extend(nutrition_lines)
         lines.append("")
 
-    if entries.get("steps") is not None:
+    if _include_section(fields, "activity") and entries.get("steps") is not None:
         lines.append("Activity:")
         lines.append(f"- Steps: {entries['steps']}")
         lines.append("")
@@ -409,6 +468,41 @@ def format_custom_item_details(item: dict[str, Any]) -> str:
         lines.append(f"Hide Script: {item['hide_script']}")
     if item.get("content"):
         lines.append(f"Content: {json.dumps(item['content'], indent=2)}")
+
+    return "\n".join(lines)
+
+
+def format_power_curves(
+    curves: list[dict[str, Any]],
+    activity_type: str,
+    include_normalised: bool,
+) -> str:
+    """Format extracted power curve data into a concise readable string."""
+    lines = [f"Power Curves ({activity_type}):", ""]
+
+    for curve in curves:
+        label = curve.get("label", curve.get("id", "Unknown"))
+        start = curve.get("start", "")
+        end = curve.get("end", "")
+        date_range = ""
+        if start and end:
+            date_range = f" ({start[:10]} to {end[:10]})"
+        lines.append(f"{label}{date_range}:")
+
+        data_points = curve.get("data_points", [])
+        if not data_points:
+            lines.append("  No data available for requested durations.")
+            lines.append("")
+            continue
+
+        for point in data_points:
+            dur_label = _format_duration_label(point["secs"])
+            parts = [f"  {dur_label}: {point.get('watts')}W"]
+            if include_normalised and "watts_per_kg" in point:
+                parts.append(f"{point['watts_per_kg']:.2f}W/kg")
+            parts.append(f"[{point.get('activity_id', '')}]")
+            lines.append(" ".join(parts))
+        lines.append("")
 
     return "\n".join(lines)
 

@@ -44,10 +44,17 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     create_custom_item,
     update_custom_item,
     delete_custom_item,
+    get_athlete_power_curves,
+    get_athlete_zones,
+    get_training_summary,
     get_server_info,
     get_server_version,
 )
-from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
+from tests.sample_data import (  # pylint: disable=wrong-import-position
+    INTERVALS_DATA,
+    POWER_CURVES_DATA,
+    SPORT_SETTINGS_DATA,
+)
 
 
 def test_get_activities(monkeypatch):
@@ -525,6 +532,119 @@ def test_get_server_info():
     assert "get_server_info" in result["tools"]
     assert "get_server_version" in result["tools"]
     assert "api_key" not in result
+
+
+def test_get_athlete_power_curves(monkeypatch):
+    """Power curves should be exposed through the server API."""
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_power_curves(activity_type="Ride", athlete_id="i1"))
+    assert "Power Curves (Ride):" in result
+    assert "This season" in result
+    assert "Last season" in result
+    assert "5s:" in result
+    assert "W/kg" in result
+
+
+def test_get_athlete_power_curves_custom_durations(monkeypatch):
+    """Custom durations should only include requested durations."""
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(activity_type="Ride", durations=[5, 60], athlete_id="i1")
+    )
+    assert "5s:" in result
+    assert "1m:" in result
+    assert "15s:" not in result
+
+
+def test_get_athlete_zones(monkeypatch):
+    """Athlete zones should return compact JSON for the selected sport."""
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.athlete.make_intervals_request", fake_request)
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
+    parsed = json.loads(result)
+    run = parsed[0]
+    assert run["sport"] == "Run"
+    assert run["thresholds"]["threshold_pace_minkm"] == "4:35"
+    assert "pace_zones" in run
+
+
+def test_get_training_summary(monkeypatch):
+    """Training summary should aggregate summary, activities, and dict-shaped wellness."""
+    summary_weeks = [
+        {
+            "date": "2026-03-10",
+            "count": 2,
+            "fitness": 60.0,
+            "fatigue": 70.0,
+            "form": -10.0,
+            "rampRate": 1.5,
+            "training_load": 100,
+            "srpe": 300,
+            "time": 7200,
+            "distance": 40000,
+            "total_elevation_gain": 500,
+            "byCategory": [
+                {
+                    "category": "Ride",
+                    "count": 2,
+                    "training_load": 100,
+                    "time": 7200,
+                    "distance": 40000,
+                    "total_elevation_gain": 500,
+                    "eftp": 260,
+                    "eftpPerKg": 3.2,
+                }
+            ],
+        }
+    ]
+    activities = [{"start_date_local": "2026-03-11T08:00:00", "compliance": 90}]
+    wellness = {"2026-03-12": {"hrvRMSSD": 55, "restingHR": 45, "sleepSecs": 28800}}
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if "athlete-summary" in url:
+            return list(summary_weeks)
+        if "activities" in url:
+            return activities
+        if "wellness" in url:
+            return wellness
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_summary.make_intervals_request", fake_request
+    )
+    result = json.loads(
+        asyncio.run(
+            get_training_summary(
+                start_date="2026-03-10",
+                end_date="2026-03-16",
+                athlete_id="i1",
+            )
+        )
+    )
+    assert result["period"]["start"] == "2026-03-10"
+    assert result["period_totals"]["sessions"] == 2
+    assert result["weeks"][0]["compliance_pct"] == 90
+    assert result["weeks"][0]["wellness"]["hrv"] == 55.0
 
 
 def test_get_custom_item_by_id(monkeypatch):
