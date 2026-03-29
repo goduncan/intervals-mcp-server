@@ -2,6 +2,11 @@
 
 This project is a Python 3.12 backend service built with FastMCP and httpx. All source code lives under `src/intervals_mcp_server` and tests live under `tests`.
 
+## Fork Maintenance
+- This repository is now maintained as an independent fork.
+- Treat `fork/main` as the primary base branch for new work.
+- Keep `origin` as reference-only unless there is a specific upstream change you want to port manually.
+
 ## Development Environment
 - Use [uv](https://github.com/astral-sh/uv) to create and manage the virtual environment.
   - `uv venv --python 3.12`

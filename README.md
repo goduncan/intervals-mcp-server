@@ -2,6 +2,8 @@
 
 Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication, diagnostics, and data retrieval for activities, events, and wellness data.
 
+This repository is maintained as an independent fork. Use `fork/main` as the primary base branch for ongoing work, and treat upstream as reference-only unless you are intentionally porting a specific change.
+
 If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
 
 ## Requirements
