@@ -9,13 +9,27 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_activity_summary, format_intervals
+from intervals_mcp_server.utils.formatting import (
+    format_activity_message,
+    format_activity_summary,
+    format_intervals,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
+
+
+async def _fetch_activity_messages_list(activity_id: str) -> list[dict[str, Any]] | None:
+    """Fetch activity messages, returning None on API error."""
+    result = await make_intervals_request(url=f"/activity/{activity_id}/messages")
+    if isinstance(result, dict) and "error" in result:
+        return None
+    if not isinstance(result, list):
+        return []
+    return [message for message in result if isinstance(message, dict)]
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
@@ -188,6 +202,12 @@ async def get_activity_details(activity_id: str) -> str:
     # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)
 
+    messages = await _fetch_activity_messages_list(activity_id)
+    if messages:
+        detailed_view += "\n\nActivity Notes:\n"
+        for message in messages:
+            detailed_view += "\n" + format_activity_message(message) + "\n"
+
     # Add additional details if available
     if "zones" in activity_data:
         zones = activity_data["zones"]
@@ -306,3 +326,55 @@ async def get_activity_streams(
         streams_summary += "\n"
 
     return streams_summary
+
+
+@mcp.tool()
+async def get_activity_messages(activity_id: str) -> str:
+    """Get messages (notes/comments) for a specific activity from Intervals.icu."""
+    messages = await _fetch_activity_messages_list(activity_id)
+    if messages is None:
+        return f"Error fetching activity messages for activity {activity_id}."
+    if not messages:
+        return f"No messages found for activity {activity_id}."
+
+    output = f"Messages for activity {activity_id}:\n\n"
+    for message in messages:
+        output += format_activity_message(message) + "\n\n"
+    return output
+
+
+@mcp.tool()
+async def add_activity_message(activity_id: str, content: str) -> str:
+    """Add a message (note/comment) to an activity on Intervals.icu."""
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/messages",
+        method="POST",
+        data={"content": content},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error adding message to activity: {error_message}"
+
+    if not result or not isinstance(result, dict):
+        return "Error: Unexpected response when adding message."
+
+    message_id = result.get("id")
+    if message_id is not None:
+        return f"Successfully added message (ID: {message_id}) to activity {activity_id}."
+    return (
+        f"Message appears to have been added to activity {activity_id}, "
+        "but no ID was returned. Please verify manually."
+    )
+
+
+@mcp.tool()
+async def get_activity_notes(activity_id: str) -> str:
+    """UI-aligned alias for get_activity_messages."""
+    return await get_activity_messages(activity_id)
+
+
+@mcp.tool()
+async def add_activity_note(activity_id: str, content: str) -> str:
+    """UI-aligned alias for add_activity_message."""
+    return await add_activity_message(activity_id, content)
