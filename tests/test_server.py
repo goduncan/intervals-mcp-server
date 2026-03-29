@@ -25,6 +25,8 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
+    add_activity_note,
+    add_activity_message,
     get_activities,
     get_activity_details,
     get_events,
@@ -33,6 +35,8 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     delete_events_by_date_range,
     get_wellness_data,
     get_activity_intervals,
+    get_activity_notes,
+    get_activity_messages,
     get_activity_streams,
     add_or_update_event,
     get_custom_items,
@@ -95,6 +99,43 @@ def test_get_activity_details(monkeypatch):
     )
     result = asyncio.run(get_activity_details(123))
     assert "Activity: Morning Ride" in result
+
+
+def test_get_activity_details_includes_notes(monkeypatch):
+    """Activity details should include notes from the messages endpoint when present."""
+    activity = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+    }
+    messages = [
+        {
+            "id": 1,
+            "name": "Duncan",
+            "created": "2024-01-01T10:30:00Z",
+            "type": "NOTE",
+            "content": "Felt strong all ride.",
+        }
+    ]
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if url == "/activity/123":
+            return activity
+        if url == "/activity/123/messages":
+            return messages
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(123))
+    assert "Activity Notes:" in result
+    assert "Felt strong all ride." in result
 
 
 def test_get_events(monkeypatch):
@@ -235,6 +276,82 @@ def test_get_activity_streams(monkeypatch):
     assert "watts" in result
     assert "heartrate" in result
     assert "Data Points: 11" in result
+
+
+def test_get_activity_messages(monkeypatch):
+    """Activity messages should return the note thread for the activity."""
+    messages = [
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return messages
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i123"))
+    assert "Messages for activity i123:" in result
+    assert "Legs felt heavy today" in result
+
+
+def test_get_activity_notes_alias(monkeypatch):
+    """Activity notes alias should use the same backend as activity messages."""
+    messages = [
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return messages
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_notes(activity_id="i123"))
+    assert "Messages for activity i123:" in result
+    assert "Legs felt heavy today" in result
+
+
+def test_add_activity_message(monkeypatch):
+    """Adding an activity message should post to the activity messages endpoint."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"id": 42}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Great run!"))
+    assert result == "Successfully added message (ID: 42) to activity i123."
+
+
+def test_add_activity_note_alias(monkeypatch):
+    """Activity note alias should call the same backend as add_activity_message."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"id": 42}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_note(activity_id="i123", content="Great run!"))
+    assert result == "Successfully added message (ID: 42) to activity i123."
 
 
 def test_add_or_update_event(monkeypatch):

@@ -110,6 +110,20 @@ Intervals: {len(workout.get("intervals", []))}
 """
 
 
+def format_activity_message(message: dict[str, Any]) -> str:
+    """Format an activity note/message into a readable string."""
+    author = message.get("name", "Unknown")
+    created = message.get("created", "Unknown time")
+    message_type = message.get("type", "MESSAGE")
+    content = message.get("content", "")
+    return (
+        f"Author: {author}\n"
+        f"Created: {created}\n"
+        f"Type: {message_type}\n"
+        f"Content: {content}"
+    )
+
+
 def _format_training_metrics(entries: dict[str, Any]) -> list[str]:
     """Format training metrics section."""
     training_metrics = []
