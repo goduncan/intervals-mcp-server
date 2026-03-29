@@ -28,6 +28,7 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
+    add_activity_note,
     add_activity_message,
     add_or_update_event,
     create_custom_item,
@@ -37,6 +38,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activities,
     get_activity_details,
     get_activity_intervals,
+    get_activity_notes,
     get_activity_messages,
     get_activity_streams,
     get_athlete_power_curves,
@@ -396,6 +398,44 @@ def test_add_activity_message_error(monkeypatch):
     )
     result = asyncio.run(add_activity_message(activity_id="i999", content="Hello"))
     assert "Error adding message" in result
+
+
+def test_get_activity_notes_alias(monkeypatch):
+    """get_activity_notes should behave like get_activity_messages."""
+    sample_messages = [
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_messages
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_notes(activity_id="i123"))
+    assert "Messages for activity i123:" in result
+    assert "Legs felt heavy today" in result
+
+
+def test_add_activity_note_alias(monkeypatch):
+    """add_activity_note should behave like add_activity_message."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"id": 42}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_note(activity_id="i123", content="Great run!"))
+    assert "Successfully added message (ID: 42) to activity i123." == result
 
 
 def test_get_custom_items(monkeypatch):
@@ -772,4 +812,3 @@ def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
     assert "Deleted 1 future events." in result
     assert "Skipped 2 non-future events: ['past', 'today']." in result
     assert "Failed to delete 0 events: []" in result
-

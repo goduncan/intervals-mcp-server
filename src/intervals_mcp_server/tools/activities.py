@@ -380,3 +380,25 @@ async def add_activity_message(
     if msg_id is not None:
         return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
     return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
+
+
+@mcp.tool()
+async def get_activity_notes(activity_id: str, api_key: str | None = None) -> str:
+    """Get notes for a specific activity.
+
+    This is a UI-aligned alias for get_activity_messages.
+    """
+    return await get_activity_messages(activity_id=activity_id, api_key=api_key)
+
+
+@mcp.tool()
+async def add_activity_note(
+    activity_id: str,
+    content: str,
+    api_key: str | None = None,
+) -> str:
+    """Add a note to a specific activity.
+
+    This is a UI-aligned alias for add_activity_message.
+    """
+    return await add_activity_message(activity_id=activity_id, content=content, api_key=api_key)

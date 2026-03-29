@@ -9,9 +9,11 @@ from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 # Import all tools for re-export
 # Note: Tools register themselves via @mcp.tool() decorators when imported
 from intervals_mcp_server.tools.activities import (  # noqa: F401
+    add_activity_note,
     get_activities,
     get_activity_details,
     get_activity_intervals,
+    get_activity_notes,
     get_activity_streams,
 )
 from intervals_mcp_server.tools.athlete import get_athlete_zones  # noqa: F401
@@ -45,9 +47,11 @@ def register_tools(mcp_instance: FastMCP) -> None:
 
 __all__ = [
     "register_tools",
+    "add_activity_note",
     "get_activities",
     "get_activity_details",
     "get_activity_intervals",
+    "get_activity_notes",
     "get_activity_streams",
     "get_athlete_zones",
     "get_athlete_power_curves",

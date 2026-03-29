@@ -65,10 +65,12 @@ config = get_config()
 # Import tool modules to register them (tools register themselves via @mcp.tool() decorators)
 # Import tool functions for re-export
 from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-import-position  # noqa: E402
+    add_activity_note,
     add_activity_message,
     get_activities,
     get_activity_details,
     get_activity_intervals,
+    get_activity_notes,
     get_activity_messages,
     get_activity_streams,
 )
@@ -97,10 +99,12 @@ from intervals_mcp_server.resources.guide import coaching_context_protocol  # py
 __all__ = [
     "make_intervals_request",
     "httpx_client",  # Re-exported for test compatibility
+    "add_activity_note",
     "add_activity_message",
     "get_activities",
     "get_activity_details",
     "get_activity_intervals",
+    "get_activity_notes",
     "get_activity_messages",
     "get_activity_streams",
     "get_athlete_zones",
