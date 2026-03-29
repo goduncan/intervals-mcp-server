@@ -82,6 +82,7 @@ from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-imp
     get_activity_messages,
     get_activity_streams,
 )
+from intervals_mcp_server.tools.athlete import get_athlete_zones  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-position  # noqa: E402
     add_or_update_event,
     delete_event,
@@ -93,6 +94,8 @@ from intervals_mcp_server.tools.meta import (  # pylint: disable=wrong-import-po
     get_server_info,
     get_server_version,
 )
+from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.training_summary import get_training_summary  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
@@ -115,6 +118,9 @@ __all__ = [
     "get_activity_notes",
     "get_activity_messages",
     "get_activity_streams",
+    "get_athlete_zones",
+    "get_athlete_power_curves",
+    "get_training_summary",
     "get_events",
     "get_event_by_id",
     "delete_event",
