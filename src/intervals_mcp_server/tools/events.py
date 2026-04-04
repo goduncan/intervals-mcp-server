@@ -202,7 +202,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}"
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}"
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -234,7 +234,7 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
-    event_result = await make_intervals_request(url=f"/athlete/{athlete_id_to_use}/event/{event_id}")
+    event_result = await make_intervals_request(url=f"/athlete/{athlete_id_to_use}/events/{event_id}")
     if isinstance(event_result, dict) and "error" in event_result:
         return f"Error deleting event: {event_result.get('message')}"
     if not isinstance(event_result, dict):

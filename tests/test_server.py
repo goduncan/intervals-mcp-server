@@ -400,7 +400,7 @@ def test_delete_event_rejects_past_event(monkeypatch):
 
     async def fake_request(*_args, **kwargs):
         calls.append((kwargs.get("method", "GET"), kwargs["url"]))
-        if kwargs["url"].endswith("/event/e1"):
+        if kwargs["url"].endswith("/events/e1"):
             return {
                 "id": "e1",
                 "date": frozen_today.isoformat(),
@@ -415,7 +415,7 @@ def test_delete_event_rejects_past_event(monkeypatch):
     result = asyncio.run(delete_event(event_id="e1", athlete_id="1"))
 
     assert result == "Error deleting event: only future events can be deleted."
-    assert calls == [("GET", "/athlete/1/event/e1")]
+    assert calls == [("GET", "/athlete/1/events/e1")]
 
 
 def test_delete_event_allows_future_event(monkeypatch):
@@ -426,7 +426,7 @@ def test_delete_event_allows_future_event(monkeypatch):
     future_date = date(2026, 3, 19)
 
     async def fake_request(*_args, **kwargs):
-        if kwargs["url"].endswith("/event/e2"):
+        if kwargs["url"].endswith("/events/e2") and kwargs.get("method", "GET") == "GET":
             return {
                 "id": "e2",
                 "date": future_date.isoformat(),
